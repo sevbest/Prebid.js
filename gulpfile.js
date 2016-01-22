@@ -17,7 +17,8 @@ var preprocessify = require('preprocessify');
 var browserSync = require("browser-sync"),
     browserify = require("browserify"),
     source = require("vinyl-source-stream"),
-    mochaPhantomJS = require("gulp-mocha-phantomjs");
+    mochaPhantomJS = require("gulp-mocha-phantomjs"),
+    istanbul = require("gulp-istanbul");
 
 
 var releaseDir = './dist/';
@@ -216,6 +217,15 @@ gulp.task("browserify", function() {
 
 gulp.task("unit-tests", function () {
     "use strict";
-    return gulp.src("./test/automatedRunnner.html")
-        .pipe(mochaPhantomJS());
+    return gulp.src('./src/**/*.js')
+        .pipe(istanbul({includeUntested: true}))
+        .on('finish', function() {
+            gulp.src("./test/automatedRunnner.html")
+                .pipe(mochaPhantomJS({reporter: 'spec'}))
+                .pipe(istanbul.writeReports({
+                    dir: './test/coverage',
+                    reporters: [ 'lcov' ],
+                    reportOpts: {dir: './test/coverage' }
+                }));
+        });
 });
