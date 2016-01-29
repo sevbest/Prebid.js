@@ -59,92 +59,62 @@
 
         */
 	   var adUnits = [{
-        code: 'div-gpt-ad-12345678-0',
-        sizes: [[300, 250], [300, 600]],
+        code: '/108939068/zoo',
+        sizes: [[970, 250], [970, 90], [728, 90]],
         bids: [
             // 1 ad unit can be targeted by multiple bids.
             {
-                bidder: 'appnexus',
+            /*    
+            OX.dfp_bidder_config = OX.dfp_bidder_config || {
+                    "/108939068/zoo": {
+                        "160x600": 538191682,
+                        "300x250": 538191682,
+                        "300x600": 538191682,
+                        "728x90": 538191682,
+                        "970x250": 538191682
+                    },
+                    "/108939068/zoo_lite": {
+                        "300x250": 538191683,
+                        "320x50": 538191683
+                    },
+                    "timeout": 2500,
+                    "zlb": false,
+                    "max_bucket": 2000,
+                    "no_dfp_kv": false,
+                    "ms": true,
+                    "bm": 1
+                };
+                */
+                bidder: 'openx',
                 params: {
-                   placementId: 'TO ADD'
+                    pgid: '108939068',
+                    unit: '538191682',
+                    jstag_url : '//ox-d.hsw.servedbyopenx.com/w/1.0/jstag?nc=108939068-Zoo'
                 }
-            }, {
-                bidder: 'pubmatic',
+            },  
+                {
+                bidder: 'indexExchange',
                 params: {
-                    publisherId: 'TO ADD',
-                    adSlot: 'TO ADD@300x250'
-                }
-            }, {
-                bidder: 'pubmatic',
-                params: {
-                    publisherId: 'TO ADD',
-                    adSlot: 'TO ADD@300x600'
-                }
-            }, {
-                bidder: 'criteo',
-                params: {
-                    nid: "TO ADD",
-                    cookiename: "cto_test"
-                }
-            }, {
-                bidder: 'yieldbot',
-                params: {
-                    psn: 'TO ADD',
-                    slot: 'TO ADD',
-                }
-            },
-            {
-                bidder: 'sovrn',
-                    params: {
-                        tagid: '123' // <String> tag Id
-                    }
-            },
-            {
-                bidder: 'pulsepoint',
-                params: {
-                        cf: '300X250',
-                        cp: 521732,
-                        ct: 76835
+                    id: '169239',        //String - required
+                    siteID: 169239,      //Number - required
+                    timeout: 300,     //Number - Optional
+                    tier2SiteID: 169241 //Number - Optional
+                 
                 }
             }
+            
             ]
+            /*
     },{
-        code: 'div-gpt-ad-12345678-1',
-        sizes: [[728, 90], [970, 90]],
+        code: 'rectanglerailtop',
+        sizes: [[300, 600], [160, 600], [300, 250]],
         bids: [{
-                bidder: 'appnexus',
-                params: {
-                   placementId: 'TO ADD'
-                }
-            },{
                 bidder: 'openx',
                 params: {
                     pgid: 'TO ADD',
                     unit: 'TO ADD',
                     jstag_url : 'TO ADD'
                 }
-            },{
-                bidder: 'aol',
-                params: {
-                    placement: 'TO ADD',
-                    network: 'TO ADD'
-                }
-            },{
-                bidder: 'rubicon',
-                params: {
-                   rp_account : 'TO ADD',
-                   rp_site: 'TO ADD',
-                   rp_zonesize : 'TO ADD',
-                   rp_tracking : 'TO ADD',
-                   rp_inventory : 'TO ADD',
-                   rp_floor : '0.1'
-                }
-            },{
-              bidder: 'yieldbot',
-              params: {
-                psn: 'TO ADD',
-                slot: 'TO ADD'
-              }
             },
               {
                 bidder: 'indexExchange',
@@ -156,6 +126,7 @@
                 	tier3SiteID: TO ADD  //Number - Optional
                 }
             }]
+            */
     }];
 
     //add the adUnits
@@ -164,6 +135,8 @@
     //register a callback handler
     pbjs.addCallback('adUnitBidsBack', function(adUnitCode){
         console.log('ad unit bids back for : ' + adUnitCode);
+    //try{ window.top.pbjs.renderAd(document, '%%PATTERN:hb_adid%%'); } catch(e) {/*ignore*/}
+    //try{ window.top.pbjs.renderAd(document, '%%PATTERN:hb_adid%%'); } catch(e) {/*ignore*/}
     });
 
      /* Request bids for the added ad units. If adUnits or adUnitCodes are
@@ -175,6 +148,8 @@
                reached, or when all bids come back, whichever happens sooner.
             */
             bidsBackHandler: function(bidResponses) {
+                //console.log('do the gpt');
+                //OX.dfp_bidder_config.no_dfp_kv = true
                 initAdserver();
 
             },
@@ -225,7 +200,7 @@
             }, {
                 key: "hb_pb",
                 val: function(bidResponse) {
-                    return bidResponse.pbMg;
+                    return bidResponse.pbLg; //was M
                 }
             }
             ]
@@ -264,14 +239,24 @@
 
 </script>
 
-
 <script>
+
     googletag.cmd.push(function() {
+         var topSlot = googletag.defineSlot('/108939068/zoo',[[970, 250], [970, 90], [728, 90]], 'div-gpt-ad-bannertop').addService(googletag.pubads());
+         //googletag.pubads().setTargeting('zoopid','quizzid');
+         //googletag.pubads().setTargeting('type','quiz');
+         //googletag.pubads().setTargeting('seq','0');
+         //googletag.pubads().setTargeting('mkcpgn','bla'); 
+        /*var rightslot = defineGTSlot([[300, 600], [160, 600], [300, 250]], 'div-gpt-ad-rectanglerailtop','rectanglerailtop').addService(googletag.pubads());*/
+       
+        var rightSlot = googletag.defineSlot('/108939068/zoo', [[300, 250], [300, 600]], 'div-gpt-ad-rectanglerailtop').addService(googletag.pubads());
 
-        var rightSlot = googletag.defineSlot('/9968336/header-bid-tag-0', [[300, 250], [300, 600]], 'div-gpt-ad-12345678-0').addService(googletag.pubads());
-
-        var topSlot = googletag.defineSlot('/9968336/header-bid-tag1', [[728, 90], [970, 90]], 'div-gpt-ad-12345678-1').addService(googletag.pubads());
-
+        //var topSlot = googletag.defineSlot('/9968336/header-bid-tag1', [[728, 90], [970, 90]], 'div-gpt-ad-12345678-1').addService(googletag.pubads());
+        
+        //googletag.pubads().enableSingleRequest();
+        //googletag.enableServices();   
+        
+        
         pbjs.que.push(function() {
             /* Set query string targeting on all GPT ad units. The logic for deciding query strings is described in the section Configure AdServer Targeting. Note that this function has to be called after all ad units on page are defined.
             */
@@ -285,9 +270,10 @@
             console.log('Dumping all bid objects to console:');
             console.log(pbjs.getBidResponses());
         });
-
-        googletag.pubads().enableSingleRequest();
-        googletag.enableServices();   
+        
+//googletag.cmd.push(function() {
+         googletag.pubads().enableSingleRequest();
+         googletag.enableServices();   
         
     });
 
@@ -300,23 +286,23 @@
 
     <h2>Prebid.js Test</h2>
 
-    <div id='div-gpt-ad-12345678-0'>
+    <div id='div-gpt-ad-bannertop'>
         <script type='text/javascript'>
-            googletag.cmd.push(function() { googletag.display('div-gpt-ad-12345678-0'); });
+            googletag.cmd.push(function() { googletag.display('div-gpt-ad-bannertop'); });
         </script>
     </div>
 
 
-    <div id='{id}'>
+    <div id='div-gpt-ad-rectanglerailtop'>
         <script type='text/javascript'>
-            googletag.cmd.push(function() { googletag.display('div-gpt-ad-12345678-1'); });
+            googletag.cmd.push(function() { googletag.display('div-gpt-ad-rectanglerailtop'); });
         </script>
-    </div>
+    </div> -->
 
 
 </body>
 
-<script>
+<!-- <script>
    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
    m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
@@ -333,6 +319,6 @@
             }
         });
     });
-</script>
+</script> -->
 
 </html>

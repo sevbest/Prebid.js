@@ -37,11 +37,12 @@ var OpenxAdapter = function OpenxAdapter(options) {
 			if (bid.params.pgid) {
 				opts.pgid = bid.params.pgid;
 			}
+			_requestBids(bid);
 		}
-		_requestBids();
+		//_requestBids();
 	}
 
-	function _requestBids() {
+	function _requestBids(bid) {
 
 		if (scriptUrl) {
 			adloader.loadScript(scriptUrl, function() {
@@ -53,19 +54,27 @@ var OpenxAdapter = function OpenxAdapter(options) {
 				POX.addPage(opts.pgid);
 
 				// Add each ad unit ID
-				for (i = 0; i < bids.length; i++) {
-					POX.addAdUnit(bids[i].params.unit);
+				//for (i = 0; i < bids.length; i++) {
+					//POX.addAdUnit(bids[i].params.unit);
+					//POX.setAdSizes(bids[i].sizes);
+				//}
+				POX.addAdUnit(bid.params.unit);
+				var aSizes = [];
+				for (i = 0; i < bid.sizes.length; i++) {
+					var size = bid.sizes[i].join('x');
+					aSizes.push(size);
 				}
+				POX.setAdSizes(aSizes);
 
 				POX.addHook(function(response) {
 					var i;
-					var bid;
+					//var bid;
 					var adUnit;
 					var adResponse;
 
 					// Map each bid to its response
-					for (i = 0; i < bids.length; i++) {
-						bid = bids[i];
+					//for (i = 0; i < bids.length; i++) {
+					//	bid = bids[i];
 
 						// Get ad response
 						adUnit = response.getOrCreateAdUnit(bid.params.unit);
@@ -89,7 +98,7 @@ var OpenxAdapter = function OpenxAdapter(options) {
 							adResponse.bidderCode = 'openx';
 							bidmanager.addBidResponse(bid.placementCode, adResponse);
 						}
-					}
+					//}
 				}, OX.Hooks.ON_AD_RESPONSE);
 
 				// Make request
@@ -102,5 +111,4 @@ var OpenxAdapter = function OpenxAdapter(options) {
 		callBids: _callBids
 	};
 };
-
 module.exports = OpenxAdapter;

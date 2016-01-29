@@ -1,5 +1,5 @@
-/* Prebid.js v0.5.0 
-Updated : 2016-01-11 */
+/* prebid.js v0.5.0 
+Updated : 2016-01-29 */
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 /** @module adaptermanger */
 
@@ -13,6 +13,7 @@ var YieldbotAdapter = require('./adapters/yieldbot');
 var IndexExchange = require('./adapters/indexExchange');
 var Sovrn = require('./adapters/sovrn');
 var PulsePointAdapter = require('./adapters/pulsepoint.js');
+var AmazonAdapter = require('./adapters/amazon');
 var bidmanager = require('./bidmanager.js');
 var utils = require('./utils.js');
 var CONSTANTS = require('./constants.json');
@@ -102,8 +103,9 @@ this.registerBidAdapter(IndexExchange(), 'indexExchange');
 this.registerBidAdapter(Sovrn(),'sovrn');
 this.registerBidAdapter(AolAdapter(), 'aol');
 this.registerBidAdapter(PulsePointAdapter(),'pulsepoint');
+this.registerBidAdapter(AmazonAdapter(),'amazon');
 
-},{"./adapters/aol":3,"./adapters/appnexus.js":4,"./adapters/criteo":5,"./adapters/indexExchange":6,"./adapters/openx":7,"./adapters/pubmatic.js":8,"./adapters/pulsepoint.js":9,"./adapters/rubicon.js":10,"./adapters/sovrn":11,"./adapters/yieldbot":12,"./bidmanager.js":15,"./constants.json":16,"./events":17,"./utils.js":20}],2:[function(require,module,exports){
+},{"./adapters/amazon":3,"./adapters/aol":4,"./adapters/appnexus.js":5,"./adapters/criteo":6,"./adapters/indexExchange":7,"./adapters/openx":8,"./adapters/pubmatic.js":9,"./adapters/pulsepoint.js":10,"./adapters/rubicon.js":11,"./adapters/sovrn":12,"./adapters/yieldbot":13,"./bidmanager.js":16,"./constants.json":17,"./events":18,"./utils.js":21}],2:[function(require,module,exports){
 function Adapter(code){
 	var bidderCode = code;
 
@@ -129,6 +131,326 @@ exports.createNew = function(bidderCode){
 	return new Adapter(bidderCode);
 };
 },{}],3:[function(require,module,exports){
+var CONSTANTS = require('../constants.json');
+var utils = require('../utils.js');
+var bidfactory = require('../bidfactory.js');
+var bidmanager = require('../bidmanager.js');
+var adloader = require('../adloader');
+
+/**
+ * Adapter for requesting bids from Amazon.
+ *
+ * @returns {{callBids: _callBids, _defaultBidderSettings: _defaultBidderSettings}}
+ * @constructor
+ */
+var AmazonAdapter = function AmazonAdapter() {
+
+  // constants
+  var AZ_BID_CODE = 'amazon',
+      AZ_SHORT_SIZE_MAP = {
+        '3x2': '300x250',
+        '7x9': '728x90',
+      },
+      AZ_DEFAULT_SIZE = '300x250',
+      AZ_PUB_ID_PARAM = 'aid',
+      AZ_SCRIPT_URL = '//c.amazon-adsystem.com/aax2/amzn_ads.js',
+      AZ_CREATIVE_START = '<script type="text/javascript">window.top.amznads.renderAd(document, "',
+      AZ_CREATIVE_END = '");</script>';
+
+  var bidSizeMap = {},
+      bidRespMap = {},
+      shortSizeMap = {},
+      // (3)00x(2)50
+      shortSizeRxp = /^(\d)\d+x(\d)\d+$/,
+      // 7x9
+      shortenedSizeRxp = /^\dx\d$/,
+      // a300x250b1
+      amznKeyRxp = /[a-z]([\dx]+)(p\d+[a-z]?)/,
+      allKeys,
+      bids,
+      initialBid;
+
+
+  /** @public the bidder settings */
+  var _defaultBidderSettings = {
+
+    adserverTargeting: [{
+      key: 'amznslots',
+      val: function (bidResponse) {
+        return bidResponse.keys;
+      }
+    }]
+
+  };
+
+  function _safeTierSort(a, b) {
+    var aTier = (a || {}).tier,
+        bTier = (b || {}).tier;
+    return (aTier || 0) - (bTier || 0);
+  }
+
+  /**
+   * Given a size as a string, reduce to
+   * the first number of each dimension
+   * @param {String} size 300x250
+   * @return {String} shortened size - 3x2
+   */
+  function _shortenedSize(size) {
+
+    if (utils.isArray(size)) {
+      return (size[0] + '')[0] + 'x' + (size[1] + '')[0];
+    }
+
+    if (shortSizeRxp.exec(size)) {
+      var shortSize = RegExp.$1 + 'x' + RegExp.$2;
+      shortSizeMap[shortSize] = size;
+      return shortSize;
+    }
+    return size;
+  }
+
+  /**
+   * Given a shortened size string, return
+   * the size that it most likely corresponds to
+   * based on the sizes that we've shortened
+   * @param {String} sizeStr 3x2
+   * @return {String} full length size string 300x250
+   */
+  function _fullSize(sizeStr) {
+    if (shortenedSizeRxp.test(sizeStr)) {
+      var size = shortSizeMap[sizeStr] || AZ_SHORT_SIZE_MAP[sizeStr];
+
+      if (!size) {
+        utils.logError('amazon: invalid size', 'ERROR', sizeStr);
+      }
+
+      return size || AZ_DEFAULT_SIZE;
+    }
+
+    return sizeStr;
+  }
+
+  /**
+   * Add the bid request for all of it's possible sizes
+   * so if we get back a bid for that size from az, we can
+   * assume that it's available for that bid
+   * @param {Object} bid bidrequest
+   */
+  function _addUnitToSizes(bid) {
+    utils._each(bid.sizes, function (size) {
+
+      var short = _shortenedSize(size),
+          sizeStr = size.join('x');
+
+      // add it to both the short + the full length
+      // version of the size, so it works under different
+      // key options from a9
+      bidSizeMap[short] = bidSizeMap[short] || [];
+      bidSizeMap[sizeStr] = bidSizeMap[sizeStr] || [];
+
+      bidSizeMap[short].push(bid);
+      bidSizeMap[sizeStr].push(bid);
+    });
+  }
+
+  /**
+   * Parse the amazon key string into the key itself
+   * as well as the size the key is for
+   * @param {String} keyStr e.g., a3x5b1
+   * @return {Object} the bid response params
+   */
+  function _parseKey(keyStr) {
+    if (!amznKeyRxp.exec(keyStr)) {
+      utils.logError('amazon', 'ERROR', 'invalid bid key: ' + keyStr);
+      return;
+    } else {
+      return {
+        key: keyStr,
+        size: RegExp.$1,
+        tier: RegExp.$2
+      };
+    }
+  }
+
+  /**
+   * Make a bid (status 1) for the given key
+   * note that these can't be filtered out without
+   * knowing a CPM to compare against, so we'll combine
+   * the bids/keys into 1 for each slot
+   */
+  function _makeSuccessBid(bidReq, size) {
+
+    var bid = bidfactory.createBid(1);
+        fullSize = _fullSize(size);
+        dim = fullSize.split('x');
+
+    bid.bidderCode = AZ_BID_CODE;
+    bid.sizes = bidReq.sizes;
+    bid.size = fullSize;
+    bid.width = parseInt(dim[0]);
+    bid.height = parseInt(dim[1]);
+    return bid;
+  }
+
+  function _generateCreative(adKey) {
+    return AZ_CREATIVE_START + adKey + AZ_CREATIVE_END;
+  }
+
+  function _rand(rangeMax) {
+    return Math.floor(Math.random() * rangeMax);
+  }
+
+  /**
+   * Given the response for a specific size, create a bid
+   * since these will have a normal CPM set, we can send them
+   * into the auction phase without filtering
+   * @param {Object} response
+   * @param {Number} response.cpm
+   * @param {String} response.size (short size, e.g. 7x9)
+   */
+  function _makeBidForResponse(response) {
+
+    // given a response, randomize the selection from the available
+    // sized units
+    var units = bidSizeMap[response.size];
+
+    if (!units) {
+      utils.logError('amazon', 'ERROR', 'unit does not exist');
+      return;
+    }
+
+    var unitIdx = _rand(units.length);
+        // remove the unit so we don't compete
+        // against ourselves
+        unit = units.splice(unitIdx, 1)[0];
+        bid = _makeSuccessBid(unit, response.size);
+
+    // log which unit we chose
+    utils.logMessage('[amazon]\tselecting ' + unit.placementCode + ' from: ' + units.length + ' available units, for: ' + response.key);
+
+    bid.ad = _generateCreative(response.key);
+    bid.keys = allKeys;
+    bid.tier = response.tier;
+    bid.key = response.key;
+    bid.cpm = response.tier;
+    bidmanager.addBidResponse(unit.placementCode, bid);
+
+    // mark that we made a bid for this unit,
+    // so we can make error/unavail bids for the
+    // rest of the units
+    bidRespMap[unit.placementCode] = true;
+  }
+
+  /**
+  * @public
+  * The entrypoint to the adapter. Load the amazon
+  * library (which will call the slots) and then request
+  * the targeting back
+  * @param {Object} params the bidding parameters
+  * @param {Array} params.bids the bids
+  */
+  function _callBids(params) {
+
+    if (utils.isEmpty(params.bids)) {
+      utils.logError('amazon', 'ERROR', 'no bids present in request');
+      return;
+    }
+
+    // the units which we want to participate
+    // in the amazon header bidding
+    initialBid = params.bids[0];
+    bids = params.bids;
+
+    utils._each(params.bids, function (bid) {
+      _addUnitToSizes(bid);
+    });
+
+    adloader.loadScript(AZ_SCRIPT_URL, _requestBids);
+	}
+
+  /**
+   * Create error (unavailable) bids for each
+   * slot that requested an amazon bid. Since it's
+   * all in one request/response, we need to manually
+   * create multiple errors so we can finish bid responses if
+   * that's it
+   */
+  function _createErrorBid() {
+    utils._each(bids, function (bidReq) {
+      var bid = bidfactory.createBid(2);
+      bid.bidderCode = 'amazon';
+      bidmanager.addBidResponse(bidReq.placementCode, bid);
+    });
+  }
+
+  /**
+   * The callback/response handler.
+   * This will create a bid response for each key
+   * that comes back from amazon, for each unit that matches that size
+   */
+	function _requestBids() {
+    if (!window.amznads) {
+      utils.logError('amazon', 'ERROR', 'amznads is not available');
+      return;
+    }
+
+    // get the amazon publisher id from the first bid
+    var aId = initialBid.params[AZ_PUB_ID_PARAM];
+
+    if (!aId) {
+      utils.logError('amazon', 'ERROR', 'aId is not set in any of the bids: ' + aId);
+      return;
+    }
+
+    amznads.getAdsCallback(aId, function() {
+
+      // get all of the keys
+      allKeys = amznads.getKeys();
+      if (utils.isEmpty(allKeys)) {
+        utils.logError('amazon', 'ERROR', 'empty response from amazon');
+        return _createErrorBid();
+      }
+
+      var responsesBySize = {};
+      utils._each(allKeys, function (key) {
+        var res = _parseKey(key);
+        if (!res) return;
+        responsesBySize[res.size] = responsesBySize[res.size] || [];
+        responsesBySize[res.size].push(res);
+      });
+
+      // iterating over the responses, get the top response for
+      // each bid size. Now we can make the response for that
+      // size.
+      utils._each(responsesBySize, function (responses, size) {
+        if (utils.isEmpty(responses)) return;
+        // get the best bid for the response
+        var top = responses.sort(_safeTierSort)[0];
+        _makeBidForResponse(top);
+      });
+
+      // we need to create error bids for the rest
+      // of the units that didn't win an actual bid;
+      // otherwise we won't finish on time and timeout
+      // will run all the way
+      utils._each(bids, function (bidReq) {
+        if (bidRespMap[bidReq.placementCode]) return;
+        var bid = bidfactory.createBid(2);
+        bid.bidderCode = 'amazon';
+        bidmanager.addBidResponse(bidReq.placementCode, bid);
+      });
+
+    });
+	}
+
+  return {
+    callBids: _callBids,
+    defaultBidderSettings: _defaultBidderSettings
+  };
+};
+
+module.exports = AmazonAdapter;
+},{"../adloader":14,"../bidfactory.js":15,"../bidmanager.js":16,"../constants.json":17,"../utils.js":21}],4:[function(require,module,exports){
 var utils = require('../utils.js'),
 	bidfactory = require('../bidfactory.js'),
 	bidmanager = require('../bidmanager.js'),
@@ -313,7 +635,7 @@ var AolAdapter = function AolAdapter() {
 };
 
 module.exports = AolAdapter;
-},{"../adloader":13,"../bidfactory.js":14,"../bidmanager.js":15,"../utils.js":20}],4:[function(require,module,exports){
+},{"../adloader":14,"../bidfactory.js":15,"../bidmanager.js":16,"../utils.js":21}],5:[function(require,module,exports){
 var CONSTANTS = require('../constants.json');
 var utils = require('../utils.js');
 var adloader = require('../adloader.js');
@@ -559,7 +881,7 @@ exports.createNew = function(){
 	return new AppNexusAdapter();
 };
 // module.exports = AppNexusAdapter;
-},{"../adloader.js":13,"../bidfactory.js":14,"../bidmanager.js":15,"../constants.json":16,"../utils.js":20,"./adapter.js":2}],5:[function(require,module,exports){
+},{"../adloader.js":14,"../bidfactory.js":15,"../bidmanager.js":16,"../constants.json":17,"../utils.js":21,"./adapter.js":2}],6:[function(require,module,exports){
 var CONSTANTS = require('../constants.json');
 var utils = require('../utils.js');
 var bidfactory = require('../bidfactory.js');
@@ -634,7 +956,7 @@ var CriteoAdapter = function CriteoAdapter() {
 };
 
 module.exports = CriteoAdapter;
-},{"../adloader":13,"../bidfactory.js":14,"../bidmanager.js":15,"../constants.json":16,"../utils.js":20}],6:[function(require,module,exports){
+},{"../adloader":14,"../bidfactory.js":15,"../bidmanager.js":16,"../constants.json":17,"../utils.js":21}],7:[function(require,module,exports){
 //Factory for creating the bidderAdaptor
 var CONSTANTS = require('../constants.json');
 var utils = require('../utils.js');
@@ -1007,7 +1329,7 @@ var IndexExchangeAdapter = function IndexExchangeAdapter() {
 
 module.exports = IndexExchangeAdapter;
 
-},{"../adloader.js":13,"../bidfactory.js":14,"../bidmanager.js":15,"../constants.json":16,"../utils.js":20}],7:[function(require,module,exports){
+},{"../adloader.js":14,"../bidfactory.js":15,"../bidmanager.js":16,"../constants.json":17,"../utils.js":21}],8:[function(require,module,exports){
 var CONSTANTS = require('../constants.json');
 var utils = require('../utils.js');
 var bidfactory = require('../bidfactory.js');
@@ -1047,11 +1369,12 @@ var OpenxAdapter = function OpenxAdapter(options) {
 			if (bid.params.pgid) {
 				opts.pgid = bid.params.pgid;
 			}
+			_requestBids(bid);
 		}
-		_requestBids();
+		//_requestBids();
 	}
 
-	function _requestBids() {
+	function _requestBids(bid) {
 
 		if (scriptUrl) {
 			adloader.loadScript(scriptUrl, function() {
@@ -1063,19 +1386,27 @@ var OpenxAdapter = function OpenxAdapter(options) {
 				POX.addPage(opts.pgid);
 
 				// Add each ad unit ID
-				for (i = 0; i < bids.length; i++) {
-					POX.addAdUnit(bids[i].params.unit);
+				//for (i = 0; i < bids.length; i++) {
+					//POX.addAdUnit(bids[i].params.unit);
+					//POX.setAdSizes(bids[i].sizes);
+				//}
+				POX.addAdUnit(bid.params.unit);
+				var aSizes = [];
+				for (i = 0; i < bid.sizes.length; i++) {
+					var size = bid.sizes[i].join('x');
+					aSizes.push(size);
 				}
+				POX.setAdSizes(aSizes);
 
 				POX.addHook(function(response) {
 					var i;
-					var bid;
+					//var bid;
 					var adUnit;
 					var adResponse;
 
 					// Map each bid to its response
-					for (i = 0; i < bids.length; i++) {
-						bid = bids[i];
+					//for (i = 0; i < bids.length; i++) {
+					//	bid = bids[i];
 
 						// Get ad response
 						adUnit = response.getOrCreateAdUnit(bid.params.unit);
@@ -1099,7 +1430,7 @@ var OpenxAdapter = function OpenxAdapter(options) {
 							adResponse.bidderCode = 'openx';
 							bidmanager.addBidResponse(bid.placementCode, adResponse);
 						}
-					}
+					//}
 				}, OX.Hooks.ON_AD_RESPONSE);
 
 				// Make request
@@ -1112,9 +1443,9 @@ var OpenxAdapter = function OpenxAdapter(options) {
 		callBids: _callBids
 	};
 };
-
 module.exports = OpenxAdapter;
-},{"../adloader":13,"../bidfactory.js":14,"../bidmanager.js":15,"../constants.json":16,"../utils.js":20}],8:[function(require,module,exports){
+
+},{"../adloader":14,"../bidfactory.js":15,"../bidmanager.js":16,"../constants.json":17,"../utils.js":21}],9:[function(require,module,exports){
 var CONSTANTS = require('../constants.json');
 var utils = require('../utils.js');
 var bidfactory = require('../bidfactory.js');
@@ -1239,7 +1570,7 @@ var PubmaticAdapter = function PubmaticAdapter() {
 };
 
 module.exports = PubmaticAdapter;
-},{"../adloader":13,"../bidfactory.js":14,"../bidmanager.js":15,"../constants.json":16,"../utils.js":20}],9:[function(require,module,exports){
+},{"../adloader":14,"../bidfactory.js":15,"../bidmanager.js":16,"../constants.json":17,"../utils.js":21}],10:[function(require,module,exports){
 var bidfactory = require('../bidfactory.js');
 var bidmanager = require('../bidmanager.js');
 var adloader = require('../adloader.js');
@@ -1307,7 +1638,7 @@ var PulsePointAdapter = function PulsePointAdapter() {
 
 module.exports = PulsePointAdapter;
 
-},{"../adloader.js":13,"../bidfactory.js":14,"../bidmanager.js":15}],10:[function(require,module,exports){
+},{"../adloader.js":14,"../bidfactory.js":15,"../bidmanager.js":16}],11:[function(require,module,exports){
 //Factory for creating the bidderAdaptor
 var CONSTANTS = require('../constants.json');
 var utils = require('../utils.js');
@@ -1497,7 +1828,7 @@ var RubiconAdapter = function RubiconAdapter() {
 
 module.exports = RubiconAdapter;
 
-},{"../bidfactory.js":14,"../bidmanager.js":15,"../constants.json":16,"../utils.js":20}],11:[function(require,module,exports){
+},{"../bidfactory.js":15,"../bidmanager.js":16,"../constants.json":17,"../utils.js":21}],12:[function(require,module,exports){
 var CONSTANTS = require('../constants.json');
 var utils = require('../utils.js');
 var bidfactory = require('../bidfactory.js');
@@ -1682,7 +2013,7 @@ var SovrnAdapter = function SovrnAdapter() {
 
 module.exports = SovrnAdapter;
 
-},{"../adloader":13,"../bidfactory.js":14,"../bidmanager.js":15,"../constants.json":16,"../utils.js":20}],12:[function(require,module,exports){
+},{"../adloader":14,"../bidfactory.js":15,"../bidmanager.js":16,"../constants.json":17,"../utils.js":21}],13:[function(require,module,exports){
 /**
  * @overview Yieldbot sponsored Prebid.js adapter.
  * @author elljoh
@@ -1830,7 +2161,7 @@ var YieldbotAdapter = function YieldbotAdapter() {
 
 module.exports = YieldbotAdapter;
 
-},{"../adloader":13,"../bidfactory":14,"../bidmanager":15,"../utils":20}],13:[function(require,module,exports){
+},{"../adloader":14,"../bidfactory":15,"../bidmanager":16,"../utils":21}],14:[function(require,module,exports){
 var utils = require('./utils');
 //add a script tag to the page, used to add /jpt call to page
 exports.loadScript = function(tagSrc, callback) {
@@ -1891,7 +2222,7 @@ exports.trackPixel = function(pixelUrl) {
 
 	}
 };
-},{"./utils":20}],14:[function(require,module,exports){
+},{"./utils":21}],15:[function(require,module,exports){
 var utils = require('./utils.js');
 
 /**
@@ -1951,7 +2282,7 @@ exports.createBid = function(statusCde) {
 };
 
 //module.exports = Bid;
-},{"./utils.js":20}],15:[function(require,module,exports){
+},{"./utils.js":21}],16:[function(require,module,exports){
 var CONSTANTS = require('./constants.json');
 var utils = require('./utils.js');
 var adaptermanager = require('./adaptermanager');
@@ -2420,7 +2751,7 @@ function adjustBids(bid){
 	}
 }
 
-},{"./adaptermanager":1,"./constants.json":16,"./events":17,"./utils.js":20}],16:[function(require,module,exports){
+},{"./adaptermanager":1,"./constants.json":17,"./events":18,"./utils.js":21}],17:[function(require,module,exports){
 module.exports={
 	"JSON_MAPPING": {
 		"PL_CODE": "code",
@@ -2459,7 +2790,7 @@ module.exports={
 	}
 }
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /**
  * events.js
  */
@@ -2552,7 +2883,7 @@ module.exports = (function (){
   return _public;
 }());
 
-},{"./constants":16,"./utils":20}],18:[function(require,module,exports){
+},{"./constants":17,"./utils":21}],19:[function(require,module,exports){
 /** @module pbjs */
 // if pbjs already exists in global dodcument scope, use it, if not, create the object
 window.pbjs = (window.pbjs || {});
@@ -3440,7 +3771,7 @@ pbjs.aliasBidder = function(bidderCode,alias){
 processQue();
 
 
-},{"./adaptermanager":1,"./adloader":13,"./bidfactory":14,"./bidmanager.js":15,"./constants.json":16,"./events":17,"./ga":19,"./utils.js":20}],19:[function(require,module,exports){
+},{"./adaptermanager":1,"./adloader":14,"./bidfactory":15,"./bidmanager.js":16,"./constants.json":17,"./events":18,"./ga":20,"./utils.js":21}],20:[function(require,module,exports){
 /**
  * ga.js - analytics adapter for google analytics 
  */
@@ -3686,7 +4017,7 @@ function sendBidWonToGa(bid) {
 	checkAnalytics();
 }
 
-},{"./constants.json":16,"./events":17,"./utils":20}],20:[function(require,module,exports){
+},{"./constants.json":17,"./events":18,"./utils":21}],21:[function(require,module,exports){
 var CONSTANTS = require('./constants.json');
 var objectType_function = 'function';
 var objectType_undefined = 'undefined';
@@ -4119,4 +4450,4 @@ var hasOwn = function(objectToCheck, propertyToCheckFor) {
         return (typeof objectToCheck[propertyToCheckFor] !== UNDEFINED) && (objectToCheck.constructor.prototype[propertyToCheckFor] !== objectToCheck[propertyToCheckFor]);
     }
 };
-},{"./constants.json":16}]},{},[18])
+},{"./constants.json":17}]},{},[19])
