@@ -14,16 +14,17 @@ var adloader = require('../adloader');
  * @returns {{callBids: _callBids}}
  * @constructor
  */
-var OpenxAdapter = function OpenxAdapter(options) {
+var OpenxAdapter = function OpenxAdapter(options) 
+{
 
 	var opts = options || {};
 	var scriptUrl;
 	var bids;
   var bidsByAdUnitId = {};
   var oxResponse;
-  var OX_RENDER_FN_NAME = 'ox_renderAd',
-      OX_CREATIVE_TAG_START = "<script type='text/javascript'>window.top.pbjs." + OX_RENDER_FN_NAME + "(window.frameElement, '",
-      OX_CREATIVE_TAG_END = "');</script>";
+  var OX_RENDER_FN_NAME = 'ox_renderAd';
+  var OX_CREATIVE_TAG_START = "<script type='text/javascript'>window.top.pbjs." + OX_RENDER_FN_NAME + "(window.frameElement, '";
+  var OX_CREATIVE_TAG_END = "');</script>";
 
 	function _callBids(params) {
 		bids = params.bids || [];
@@ -42,13 +43,71 @@ var OpenxAdapter = function OpenxAdapter(options) {
 			if (bid.params.pgid) {
 				opts.pgid = bid.params.pgid;
 			}
-			_requestBids(bid);
+			//_requestBids(bid);
 		}
-		//_requestBids();
+		_requestBids();
 	}
 
-<<<<<<< HEAD
-	function _requestBids(bid) {
+	function _requestBids() {
+
+    if (!scriptUrl) {
+      utils.logError('OPENX - no script url given!', 'ERROR');
+      return;
+    }
+
+    adloader.loadScript(scriptUrl, function() {
+      var POX = OX();
+
+      POX.frameCreatives(false);
+      POX.setPageURL(opts.pageURL);
+      POX.setRefererURL(opts.refererURL);
+      POX.addPage(opts.pgid);
+
+      utils._each(bids, function (bid) {
+        POX.addAdUnit(bid.params.unit);
+        var aSizes = [];
+		for (i = 0; i < bid.sizes.length; i++) {
+			var size = bid.sizes[i].join('x');
+			aSizes.push(size);
+			}
+		POX.setAdSizes(aSizes);
+      });
+
+      _bootstrapOpenX();
+
+      POX.addHook(function(response) {
+        oxResponse = response;
+
+        utils._each(bids, function (bid) {
+          var adUnit = response.getOrCreateAdUnit(bid.params.unit),
+              adUnitId = adUnit.get('adunit_id') + '';
+
+
+          // we support multiple bids for the same ad unit id
+          // this is how we're going to actually render the ad
+          bidsByAdUnitId[adUnitId] = bidsByAdUnitId[adUnitId] || {};
+          bidsByAdUnitId[adUnitId][adUnit.get('ad_id') + ''] = adUnit;
+
+          var adResponse;
+          if (adUnit.get('pub_rev')) {
+            adResponse = _createBidResponse( adUnit);
+          } else {
+            adResponse = _createErrorResponse( adUnit);
+          }
+
+          bidmanager.addBidResponse(bid.placementCode, adResponse);
+        });
+
+      }, OX.Hooks.ON_AD_RESPONSE);
+
+      // Make request
+      		POX.load();
+    	});
+	}
+
+
+ /*
+	function _oldrequestBids(bid) {
 
 		if (scriptUrl) {
 			adloader.loadScript(scriptUrl, function() {
@@ -111,7 +170,8 @@ var OpenxAdapter = function OpenxAdapter(options) {
 				POX.load();
 			});
 		}
-=======
+	}
+*/
   function _creative(adUnitId, adId) {
     return OX_CREATIVE_TAG_START + adUnitId + "','" + adId + OX_CREATIVE_TAG_END;
   }
@@ -167,65 +227,9 @@ var OpenxAdapter = function OpenxAdapter(options) {
     };
   }
 
-	function _requestBids() {
-
-    if (!scriptUrl) {
-      utils.logError('OPENX - no script url given!', 'ERROR');
-      return;
-    }
-
-    adloader.loadScript(scriptUrl, function() {
-      var POX = OX();
-
-      POX.frameCreatives(false);
-      POX.setPageURL(opts.pageURL);
-      POX.setRefererURL(opts.refererURL);
-      POX.addPage(opts.pgid);
-
-      utils._each(bids, function (bid) {
-        POX.addAdUnit(bid.params.unit);
-      });
-
-      _bootstrapOpenX();
-
-      POX.addHook(function(response) {
-        oxResponse = response;
-
-        utils._each(bids, function (bid) {
-          var adUnit = response.getOrCreateAdUnit(bid.params.unit),
-              adUnitId = adUnit.get('adunit_id') + '';
-
-
-          // we support multiple bids for the same ad unit id
-          // this is how we're going to actually render the ad
-          bidsByAdUnitId[adUnitId] = bidsByAdUnitId[adUnitId] || {};
-          bidsByAdUnitId[adUnitId][adUnit.get('ad_id') + ''] = adUnit;
-
-          var adResponse;
-          if (adUnit.get('pub_rev')) {
-            adResponse = _createBidResponse(bid, adUnit);
-          } else {
-            adResponse = _createErrorResponse(bid, adUnit);
-          }
-
-          bidmanager.addBidResponse(bid.placementCode, adResponse);
-        });
-
-      }, OX.Hooks.ON_AD_RESPONSE);
-
-      // Make request
-      POX.load();
-    });
-
->>>>>>> remotes/origin/openx-creative-fix
-	}
-
 	return {
 		callBids: _callBids
 	};
 };
-<<<<<<< HEAD
-=======
 
->>>>>>> remotes/origin/openx-creative-fix
 module.exports = OpenxAdapter;
