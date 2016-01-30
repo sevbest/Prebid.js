@@ -17,6 +17,9 @@ var AmazonAdapter = function AmazonAdapter() {
       AZ_SHORT_SIZE_MAP = {
         '3x2': '300x250',
         '7x9': '728x90',
+        '9x2': '970x250',
+        '3x6': '300x600',
+        '1x6': '160x600'
       },
       AZ_DEFAULT_SIZE = '300x250',
       AZ_PUB_ID_PARAM = 'aid',
@@ -181,7 +184,7 @@ var AmazonAdapter = function AmazonAdapter() {
     // sized units
     var units = bidSizeMap[response.size];
 
-    if (!units) {
+    if (utils.isEmpty(units)) {
       utils.logError('amazon', 'ERROR', 'unit does not exist');
       return;
     }
