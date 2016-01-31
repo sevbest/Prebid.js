@@ -187,8 +187,8 @@ exports.addBidResponse = function(adUnitCode, bid) {
 			bidResponseObj.bidsReceivedCount++;
 
 		} else {
-			//should never reach this code
-			utils.logError('Internal error in bidmanager.addBidResponse. Params: ' + adUnitCode + ' & ' + bid );
+			//should never reach this code , thats bullshit though.
+			//utils.logError('Internal error in bidmanager.addBidResponse. Params: ' + adUnitCode + ' & ' + bid );
 		}
 		
 

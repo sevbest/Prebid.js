@@ -35,23 +35,23 @@ var AmazonAdapter = function AmazonAdapter() {
       // 7x9
       shortenedSizeRxp = /^\dx\d$/,
       // a300x250b1
-      amznKeyRxp = /[a-z]([\dx]+)(p\d+[a-z]?)/,
+      amznKeyRxp = /[a-z]([\dx]+)(p(\d+)[a-z]?)/,
       allKeys,
       bids,
       initialBid;
 
 
   /** @public the bidder settings */
-  var _defaultBidderSettings = {
+  /*var _defaultBidderSettings = {
 
     adserverTargeting: [{
       key: 'amznslots',
       val: function (bidResponse) {
-        return bidResponse.keys;
+        return bidResponse.key;
       }
     }]
 
-  };
+  };*/
 
   function _safeTierSort(a, b) {
     var aTier = (a || {}).tier,
@@ -137,7 +137,8 @@ var AmazonAdapter = function AmazonAdapter() {
       return {
         key: keyStr,
         size: RegExp.$1,
-        tier: RegExp.$2
+        tier: RegExp.$3,
+        cpm: RegExp.$2
       };
     }
   }
@@ -202,7 +203,7 @@ var AmazonAdapter = function AmazonAdapter() {
     bid.keys = allKeys;
     bid.tier = response.tier;
     bid.key = response.key;
-    bid.cpm = response.tier;
+    bid.cpm = response.cpm;
     bidmanager.addBidResponse(unit.placementCode, bid);
 
     // mark that we made a bid for this unit,
@@ -315,7 +316,7 @@ var AmazonAdapter = function AmazonAdapter() {
 
   return {
     callBids: _callBids,
-    defaultBidderSettings: _defaultBidderSettings
+   // defaultBidderSettings: _defaultBidderSettings
   };
 };
 

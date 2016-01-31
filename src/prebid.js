@@ -526,12 +526,23 @@ pbjs.renderAd = function(doc, id) {
 			//lookup ad by ad Id
 			var adObject = bidmanager._adResponsesByBidderId[id];
 			if (adObject) {
+
 				//emit 'bid won' event here
 				events.emit(BID_WON, adObject);
 				var height = adObject.height;
 				var width = adObject.width;
 				var url = adObject.adUrl;
+				var riurl = adObject.riUrl;
 				var ad = adObject.ad;
+
+				if (adObject.bidderCode == 'openx') {
+                        var imp = riurl +'?bi=' + OX.browser_id.get() + '&ts=' + adObject.ts;
+                        var iframe1 = document.createElement('iframe');
+                        iframe1.style.display = 'none';
+                        iframe1.src = imp;
+                        document.body.appendChild(iframe1);
+                    }
+
 
 				if (ad) {
 					doc.write(ad);
