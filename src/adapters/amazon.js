@@ -186,7 +186,7 @@ var AmazonAdapter = function AmazonAdapter() {
     var units = bidSizeMap[response.size];
 
     if (utils.isEmpty(units)) {
-      utils.logError('amazon', 'ERROR', 'unit does not exist');
+      //utils.logError('amazon', 'ERROR', 'unit does not exist');
       return;
     }
 
