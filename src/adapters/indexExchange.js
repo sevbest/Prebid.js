@@ -217,6 +217,7 @@ var IndexExchangeAdapter = function IndexExchangeAdapter() {
 		'siteID'
 	];
 	var firstAdUnitCode = '';
+	var bidRespMap = [];
 
 	function _callBids(request) {
 		var bidArr = request.bids;
@@ -334,9 +335,19 @@ var IndexExchangeAdapter = function IndexExchangeAdapter() {
 							bid.siteID = slotObj.siteID;
 
 							bidmanager.addBidResponse(adUnitCode, bid);
+							bidRespMap[bid.placementCode] = true;
 						}
 					});
 				});
+				//fail all remaining bids so we don't timeout.
+				 utils._each(slotIdMap, function(bid, adSlotId) {
+				      if (!bidRespMap[bid.placementCode])
+				      {
+				      	var bid = bidfactory.createBid(2);
+				      	bid.bidderCode = ADAPTER_CODE;
+				      	bidmanager.addBidResponse(bid.placementCode, bid);
+				  	   }
+				    });
 			} catch (e) {
 				utils.logError('Error calling index adapter', ADAPTER_NAME, e);
 				logErrorBidResponse();
