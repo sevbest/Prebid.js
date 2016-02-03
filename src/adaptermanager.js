@@ -4,6 +4,7 @@ var RubiconAdapter = require('./adapters/rubicon.js');
 var AppNexusAdapter = require('./adapters/appnexus.js');
 var AolAdapter = require('./adapters/aol');
 var OpenxAdapter = require('./adapters/openx');
+var SonobiAdapter = require('./adapters/sonobi.js');
 var PubmaticAdapter = require('./adapters/pubmatic.js');
 var CriteoAdapter = require('./adapters/criteo');
 var YieldbotAdapter = require('./adapters/yieldbot');
@@ -93,6 +94,7 @@ exports.aliasBidAdapter = function(bidderCode, alias){
 this.registerBidAdapter(RubiconAdapter(), 'rubicon');
 this.registerBidAdapter(AppNexusAdapter.createNew(), 'appnexus');
 this.registerBidAdapter(OpenxAdapter(), 'openx');
+this.registerBidAdapter(SonobiAdapter(), 'sonobi');
 this.registerBidAdapter(PubmaticAdapter(), 'pubmatic');
 this.registerBidAdapter(CriteoAdapter(), 'criteo');
 this.registerBidAdapter(YieldbotAdapter(), 'yieldbot');

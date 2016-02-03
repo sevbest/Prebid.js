@@ -11,6 +11,7 @@ var ADAPTER_CODE = 'indexExchange';
 var cygnus_index_primary_request = true;
 var cygnus_index_parse_res = function() {};
 window.cygnus_index_args = {};
+window.cygnus_index_args.slots = []; 
 
 var cygnus_index_adunits =  [[728,90],[120,600],[300,250],[160,600],[336,280],[234,60],[300,600],[300,50],[320,50],[970,250],[300,1050],[970,90],[180,150]];
 
@@ -223,8 +224,8 @@ var IndexExchangeAdapter = function IndexExchangeAdapter() {
 		if (!utils.hasValidBidRequest(bidArr[0].params, requiredParams, ADAPTER_NAME)) {
 			return;
 		}
-
-		cygnus_index_args.slots = [];
+		//if (utils.isEmpty(cygnus_index_args))
+		//cygnus_index_args.slots = [];
 		var bidCount = 0;
 
 		//Grab the slot level data for cygnus_index_args

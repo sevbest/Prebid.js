@@ -226,6 +226,7 @@ function setGPTAsyncTargeting(code, slot) {
 	utils._each(pb_keyHistoryMap[code], function(value, key){
 		//since DFP doesn't support deleting a single key, we will set all to empty string
 		//This is "clear" for that key
+		//slot.clearTargeting(key);
 		slot.setTargeting(key, '');
 		//utils.logMessage('Attempting to clear the key : ' + key + ' to empty string for code: ' + code);
 	});
@@ -535,12 +536,11 @@ pbjs.renderAd = function(doc, id) {
 				var riurl = adObject.riUrl;
 				var ad = adObject.ad;
 
-				if (adObject.bidderCode == 'openx') {
+				if (adObject.bidderCode == 'openx' && riurl != undefined ) {
+					//openx beacon
                         var imp = riurl +'?bi=' + OX.browser_id.get() + '&ts=' + adObject.ts;
-                        var iframe1 = document.createElement('iframe');
-                        iframe1.style.display = 'none';
-                        iframe1.src = imp;
-                        document.body.appendChild(iframe1);
+                        var html = '<div style="position:absolute;left:0px;top:0px;visibility:hidden;""><img src="'+imp+'"/></div>';
+                        document.body.appendChild(document.createRange().createContextualFragment(html));
                     }
 
 
