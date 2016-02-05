@@ -8,6 +8,7 @@ var objectType_undefined = 'undefined';
 
 var externalCallbackByAdUnitArr = [];
 var externalCallbackArr = [];
+var externalCallbackBidWon = [];
 var externalOneTimeCallback = null;
 var biddersByPlacementMap = {};
 
@@ -57,7 +58,8 @@ exports.clearAllBidResponses = function(adUnitCode) {
 
 	for (var prop in this.pbBidResponseByPlacement) {
 		delete this.pbBidResponseByPlacement[prop];
-	}
+	  }
+	//this.pbBidResponseByPlacement = {};
 };
 
 /**
@@ -182,6 +184,9 @@ exports.addBidResponse = function(adUnitCode, bid) {
 			//update bid response object
 			bidResponseObj = pbBidResponseByPlacement[adUnitCode];
 			//bidResponseObj.status = statusCode;
+			if (!bidResponseObj.bids)
+				bidResponseObj.bids = [];
+
 			bidResponseObj.bids.push(bid);
 			//increment bid response by placement
 			bidResponseObj.bidsReceivedCount++;
@@ -189,6 +194,7 @@ exports.addBidResponse = function(adUnitCode, bid) {
 		} else {
 			//should never reach this code , thats bullshit though.
 			//utils.logError('Internal error in bidmanager.addBidResponse. Params: ' + adUnitCode + ' & ' + bid );
+			bidResponseObj = this.createEmptyBidResponseObj();
 		}
 		
 
@@ -439,6 +445,11 @@ exports.addCallback = function(id, callback, cbEvent){
 	}
 	else if(CONSTANTS.CB.TYPE.AD_UNIT_BIDS_BACK === cbEvent){
 		externalCallbackByAdUnitArr.push(callback);
+	}
+	else if(CONSTANTS.EVENTS.BID_WON === cbEvent){
+		events.on(CONSTANTS.EVENTS.BID_WON,callback);
+		//externalCallbackBidWon.push(callback);
+		//externalCallbackByAdUnitArr.push(callback);
 	}
 };
 

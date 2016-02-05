@@ -1,3 +1,4 @@
+"use strict";
 var CONSTANTS = require('../constants.json');
 var utils = require('../utils.js');
 var bidfactory = require('../bidfactory.js');
@@ -72,7 +73,7 @@ var OpenxAdapter = function OpenxAdapter(options) {
 
 					// Map each bid to its response
 					for (i = 0; i < bids.length; i++) {
-						bid = bids[i];
+						var bid = bids[i];
 
 
 						// Get ad response

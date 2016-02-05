@@ -221,6 +221,8 @@ var IndexExchangeAdapter = function IndexExchangeAdapter() {
 
 	function _callBids(request) {
 		var bidArr = request.bids;
+		bidRespMap = [];
+		slotIdMap = {};
 
 		if (!utils.hasValidBidRequest(bidArr[0].params, requiredParams, ADAPTER_NAME)) {
 			return;
@@ -317,9 +319,9 @@ var IndexExchangeAdapter = function IndexExchangeAdapter() {
 
 				utils._each(indexObj, function(adContents, cpmAndSlotId) {
 					utils._each(slotIdMap, function(bid, adSlotId) {
-						var obj = cpmAndSlotId.split('_');
-						var currentId = obj[0];
-						var currentCPM = obj[1];
+						var myindex = cpmAndSlotId.lastIndexOf('_');
+						var currentId = cpmAndSlotId.substring(0,myindex);
+						var currentCPM = cpmAndSlotId.substring(myindex+1);
 						if (currentId === adSlotId) {
 							var bidObj = slotIdMap[adSlotId];
 							var adUnitCode = bidObj.placementCode;
@@ -339,18 +341,22 @@ var IndexExchangeAdapter = function IndexExchangeAdapter() {
 						}
 					});
 				});
-				//fail all remaining bids so we don't timeout.
-				 utils._each(slotIdMap, function(bid, adSlotId) {
-				      if (!bidRespMap[bid.placementCode])
-				      {
-				      	var bid = bidfactory.createBid(2);
-				      	bid.bidderCode = ADAPTER_CODE;
-				      	bidmanager.addBidResponse(bid.placementCode, bid);
-				  	   }
-				    });
+				
+				
 			} catch (e) {
 				utils.logError('Error calling index adapter', ADAPTER_NAME, e);
 				logErrorBidResponse();
+			}finally {
+				//fail all remaining bids so we don't timeout or error.
+			 utils._each(slotIdMap, function(bidObj, adSlotId) {
+				if (!bidRespMap[bidObj.placementCode])
+				      {
+				      	var bid = bidfactory.createBid(2);
+				      	bid.bidderCode = ADAPTER_CODE;
+
+				      	bidmanager.addBidResponse(bidObj.placementCode, bid);
+				  	   }
+				    });
 			}
 		};
 	}
